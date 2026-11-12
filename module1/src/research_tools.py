@@ -1,4 +1,5 @@
 from typing import List, Dict
+from concurrent.futures import ThreadPoolExecutor
 import requests
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional
@@ -158,12 +159,13 @@ def arxiv_search_tool(
     para contener el texto extraído del PDF (full_text si es posible).
     """
     # ===== FLAGS INTERNOS =====
-    _INCLUDE_PDF = True
-    _EXTRACT_TEXT = True
+    # PDF download is off by default: the abstract is enough for citations and
+    # fetching PDFs dominated the runtime. Set both to True to get PDF text.
+    _INCLUDE_PDF = False
+    _EXTRACT_TEXT = False
     _MAX_PAGES = 6
     _TEXT_CHARS = 5000
     _SAVE_FULL_TEXT = False
-    _SLEEP_SECONDS = 1.0
     # ==========================
 
     api_url = (
@@ -218,27 +220,33 @@ def arxiv_search_tool(
                 "link_pdf": link_pdf,
             }
 
-            pdf_bytes = None
-            if (_INCLUDE_PDF or _EXTRACT_TEXT) and link_pdf:
+            out.append(item)
+
+        # Optional PDF enrichment, done in parallel across results.
+        if (_INCLUDE_PDF or _EXTRACT_TEXT) and out:
+
+            def _enrich(item: Dict) -> None:
+                link = item.get("link_pdf")
+                if not link:
+                    return
                 try:
-                    pdf_bytes = fetch_pdf_bytes(link_pdf, timeout=90)
-                    time.sleep(_SLEEP_SECONDS)
+                    pdf_bytes = fetch_pdf_bytes(link, timeout=30)
                 except Exception as e:
                     item["pdf_error"] = f"PDF fetch failed: {e}"
-
-            if _EXTRACT_TEXT and pdf_bytes:
+                    return
+                if not _EXTRACT_TEXT:
+                    return
                 try:
                     text = pdf_bytes_to_text(pdf_bytes, max_pages=_MAX_PAGES)
                     text = clean_text(text) if text else ""
                     if text:
-                        if _SAVE_FULL_TEXT:
-                            item["summary"] = text
-                        else:
-                            item["summary"] = text[:_TEXT_CHARS]
+                        item["summary"] = text if _SAVE_FULL_TEXT else text[:_TEXT_CHARS]
                 except Exception as e:
                     item["text_error"] = f"Text extraction failed: {e}"
 
-            out.append(item)
+            with ThreadPoolExecutor(max_workers=min(4, len(out))) as pool:
+                list(pool.map(_enrich, out))
+
         return out
     except ET.ParseError as e:
         return [{"error": f"arXiv API XML parse failed: {e}"}]

@@ -2,14 +2,14 @@ import json
 import re
 from typing import List
 from datetime import datetime
-from aisuite import Client
+from src.llm_client import make_client
 from src.agents import (
     research_agent,
     writer_agent,
     editor_agent,
 )
 
-client = Client()
+client = make_client()
 
 
 def clean_json_block(raw: str) -> str:
@@ -24,7 +24,7 @@ from typing import List
 import json, ast
 
 
-def planner_agent(topic: str, model: str = "openai:o4-mini") -> List[str]:
+def planner_agent(topic: str, model: str = "anthropic:claude-sonnet-5-5") -> List[str]:
     prompt = f"""
 You are a planning agent responsible for organizing a research workflow using multiple intelligent agents.
 
@@ -58,7 +58,6 @@ Topic: "{topic}"
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        temperature=1,
     )
 
     raw = response.choices[0].message.content.strip()

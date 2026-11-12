@@ -1,18 +1,18 @@
 from datetime import datetime
 from urllib import response
-from aisuite import Client
+from src.llm_client import make_client
 from src.research_tools import (
     arxiv_search_tool,
     tavily_search_tool,
     wikipedia_search_tool,
 )
 
-client = Client()
+client = make_client()
 
 
 # === Research Agent ===
 def research_agent(
-    prompt: str, model: str = "openai:gpt-4.1-mini", return_messages: bool = False
+    prompt: str, model: str = "anthropic:claude-haiku-5-5", return_messages: bool = False
 ):
     print("==================================")
     print("🔍 Research Agent")
@@ -84,9 +84,8 @@ USER RESEARCH REQUEST:
             model=model,
             messages=messages,
             tools=tools,
-            tool_choice="auto",
+            tool_choice={"type": "auto"},
             max_turns=5,
-            temperature=0.0,  # Use deterministic output
         )
 
         content = resp.choices[0].message.content or ""
@@ -154,7 +153,7 @@ USER RESEARCH REQUEST:
 
 def writer_agent(
     prompt: str,
-    model: str = "openai:gpt-4.1-mini",
+    model: str = "anthropic:claude-haiku-5-5",
     min_words_total: int = 2400,
     min_words_per_section: int = 400,
     max_tokens: int = 15000,
@@ -229,7 +228,6 @@ INTERNAL CHECKLIST (DO NOT INCLUDE IN OUTPUT):
         resp = client.chat.completions.create(
             model=model,
             messages=messages_,
-            temperature=0,
             max_tokens=max_tokens,
         )
         return resp.choices[0].message.content or ""
@@ -248,7 +246,7 @@ INTERNAL CHECKLIST (DO NOT INCLUDE IN OUTPUT):
 
 def editor_agent(
     prompt: str,
-    model: str = "openai:gpt-4.1-mini",
+    model: str = "anthropic:claude-haiku-5-5",
     target_min_words: int = 2400,
 ):
     print("==================================")
@@ -288,7 +286,7 @@ Return only the revised, polished text in Markdown format without explanatory co
     ]
 
     response = client.chat.completions.create(
-        model=model, messages=messages, temperature=0
+        model=model, messages=messages
     )
 
     content = response.choices[0].message.content
